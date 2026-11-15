@@ -73,6 +73,7 @@ class PostService
 
         if ($cover instanceof UploadedFile) {
             $data['cover_image_path'] = $cover->store('covers', 'public');
+            $data['cover_template'] = null;
         }
 
         return $this->posts->createForUser($user, [...$data, 'slug' => $slug, 'is_published' => false]);
@@ -88,6 +89,12 @@ class PostService
                 Storage::disk('public')->delete($post->cover_image_path);
             }
             $data['cover_image_path'] = $cover->store('covers', 'public');
+            $data['cover_template'] = null;
+        } elseif (array_key_exists('cover_template', $data) && $data['cover_template'] !== null) {
+            if ($post->cover_image_path) {
+                Storage::disk('public')->delete($post->cover_image_path);
+            }
+            $data['cover_image_path'] = null;
         }
 
         return $this->posts->update($post, $data);
@@ -117,7 +124,7 @@ class PostService
             Storage::disk('public')->delete($post->cover_image_path);
         }
 
-        return $this->posts->update($post, ['cover_image_path' => $cover->store('covers', 'public')]);
+        return $this->posts->update($post, ['cover_image_path' => $cover->store('covers', 'public'), 'cover_template' => null]);
     }
 
     public function removeCover(Post $post): Post
@@ -126,6 +133,6 @@ class PostService
             Storage::disk('public')->delete($post->cover_image_path);
         }
 
-        return $this->posts->update($post, ['cover_image_path' => null]);
+        return $this->posts->update($post, ['cover_image_path' => null, 'cover_template' => null]);
     }
 }

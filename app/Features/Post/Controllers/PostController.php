@@ -43,6 +43,7 @@ class PostController
             'excerpt' => ['nullable', 'string', 'max:2000'],
             'content' => ['required', 'string', 'max:100000'],
             'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'cover_template' => ['nullable', 'string', 'in:editorial,minimal,urban,nature'],
         ]);
         $this->posts->create($request->user(), $data);
 
@@ -68,6 +69,7 @@ class PostController
             'excerpt' => ['nullable', 'string', 'max:2000'],
             'content' => ['required', 'string', 'max:100000'],
             'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'cover_template' => ['nullable', 'string', 'in:editorial,minimal,urban,nature'],
         ]);
         $this->posts->update($post, $data);
 

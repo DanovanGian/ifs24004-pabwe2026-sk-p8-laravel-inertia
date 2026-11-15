@@ -5,6 +5,8 @@ import PublicLayout from '../../Layouts/PublicLayout';
 function ArticleVisual({ post, featured = false }) {
     return post.cover_image_path ? (
         <img src={`/storage/${post.cover_image_path}`} alt="" className={`h-full w-full object-cover transition duration-700 group-hover:scale-[1.035] ${featured ? 'absolute inset-0' : 'aspect-[1.58]'}`} />
+    ) : post.cover_template ? (
+        <div className={`cover-artwork cover-artwork-${post.cover_template} grid place-items-center overflow-hidden ${featured ? 'absolute inset-0' : 'aspect-[1.58]'}`}><span className="font-serif text-6xl italic text-white/90">B.</span></div>
     ) : (
         <div className={`relative grid h-full w-full place-items-center overflow-hidden bg-gradient-to-br from-[#244f42] via-[#3d7864] to-[#d89570] ${featured ? 'absolute inset-0' : 'aspect-[1.58]'}`}>
             <div aria-hidden="true" className="absolute -right-14 -top-20 size-72 rounded-full border border-white/25" />

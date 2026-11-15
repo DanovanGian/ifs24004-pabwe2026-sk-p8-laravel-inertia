@@ -24,7 +24,7 @@ export default function PostShow({ post, isAuthenticated }) {
                     {post.excerpt && <p className="mt-6 text-lg leading-8 text-ink/65">{post.excerpt}</p>}
                     <p className="mt-7 text-sm text-ink/55">Oleh <span className="font-semibold text-ink">{post.user?.name}</span> · {new Date(post.published_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                 </header>
-                {post.cover_image_path && <img src={`/storage/${post.cover_image_path}`} alt="" className="mb-12 max-h-[34rem] w-full rounded-3xl object-cover" />}
+                {post.cover_image_path ? <img src={`/storage/${post.cover_image_path}`} alt="" className="mb-12 max-h-[34rem] w-full rounded-3xl object-cover" /> : post.cover_template && <div aria-label={`Sampul ${post.cover_template}`} className={`cover-artwork cover-artwork-${post.cover_template} mb-12 grid aspect-[2/1] max-h-[34rem] place-items-center overflow-hidden rounded-3xl`}><span className="font-serif text-8xl italic text-white/90">B.</span></div>}
                 <div ref={contentRef} className="mx-auto max-w-3xl rounded-2xl bg-transparent" />
             </article>
             <section className="mx-auto max-w-7xl px-5 pb-20 sm:px-8">

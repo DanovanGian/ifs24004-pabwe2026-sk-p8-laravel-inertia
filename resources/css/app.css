@@ -47,6 +47,43 @@ a, button, select { cursor: pointer; }
     box-shadow: 0 18px 55px rgb(21 35 30 / 0.055);
 }
 
+.cover-artwork {
+    position: relative;
+    isolation: isolate;
+    background-color: #315d4e;
+}
+
+.cover-artwork::before,
+.cover-artwork::after {
+    position: absolute;
+    z-index: -1;
+    content: "";
+}
+
+.cover-artwork::before {
+    inset: auto -8% -58% auto;
+    width: 72%;
+    aspect-ratio: 1;
+    border: 1px solid rgb(255 255 255 / 35%);
+    border-radius: 9999px;
+}
+
+.cover-artwork::after {
+    inset: auto -1% -48% auto;
+    width: 54%;
+    aspect-ratio: 1;
+    border: 1px solid rgb(255 255 255 / 25%);
+    border-radius: 9999px;
+}
+
+.cover-artwork-editorial { background: linear-gradient(135deg, #264d40 0%, #68826e 52%, #ce936e 100%); }
+.cover-artwork-minimal { background: linear-gradient(145deg, #efe6d8 0%, #d5bf9e 55%, #9b785f 100%); }
+.cover-artwork-urban { background: linear-gradient(135deg, #172a3c 0%, #34546b 55%, #cc7558 100%); }
+.cover-artwork-nature { background: linear-gradient(145deg, #94a98b 0%, #496d55 58%, #203f36 100%); }
+.cover-artwork-minimal::before,
+.cover-artwork-minimal::after { border-color: rgb(79 57 40 / 25%); }
+.cover-artwork-minimal > span { color: #4f3928; }
+
 .form-control {
     min-height: 3rem;
     width: 100%;
