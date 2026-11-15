@@ -34,7 +34,7 @@ class AiPostController
         } catch (Throwable $exception) {
             report($exception);
 
-            return back()->withErrors(['generation' => $exception instanceof RuntimeException ? $exception->getMessage() : 'Artikel gagal dibuat. Periksa konfigurasi OpenAI lalu coba kembali.']);
+            return back()->withErrors(['generation' => $exception instanceof RuntimeException ? $exception->getMessage() : 'Artikel gagal dibuat. Periksa konfigurasi Groq lalu coba kembali.']);
         }
 
         return back()->with('generatedPosts', array_map(fn ($item) => $item->toArray(), $generated));

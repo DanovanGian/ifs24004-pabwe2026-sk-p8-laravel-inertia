@@ -1,23 +1,19 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "ifs24004/ifs24004-pabwe2026-sk-p8-laravel-inertia",
+    "name": "laravel/laravel",
     "type": "project",
-    "description": "BlogVerse Pro: platform publikasi artikel multi-tier.",
-    "keywords": [
-        "laravel",
-        "framework"
-    ],
+    "description": "The skeleton application for the Laravel framework.",
+    "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
         "php": "^8.3",
-        "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
-        "phpoffice/phpspreadsheet": "^5.11"
+        "inertiajs/inertia-laravel": "^2.0",
+        "phpoffice/phpspreadsheet": "^5.10"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "laravel/boost": "^2.10",
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
         "laravel/pint": "^1.27",
@@ -51,8 +47,7 @@
             "@php artisan dev"
         ],
         "test": [
-            "@php artisan config:clear --ansi @no_additional_args",
-            "@php artisan test"
+            "@php vendor/bin/phpunit --coverage-text"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

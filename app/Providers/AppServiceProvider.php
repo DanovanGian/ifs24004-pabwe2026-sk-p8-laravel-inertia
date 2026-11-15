@@ -3,7 +3,7 @@
 namespace App\Providers;
 
 use App\Features\Ai\Contracts\AiClientInterface;
-use App\Features\Ai\Services\OpenAiPostGeneratorService;
+use App\Features\Ai\Services\GroqPostGeneratorService;
 use App\Features\Post\Contracts\PostRepositoryInterface;
 use App\Features\Post\Models\Post;
 use App\Features\Post\Policies\PostPolicy;
@@ -20,7 +20,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(PostRepositoryInterface::class, PostRepository::class);
-        $this->app->bind(AiClientInterface::class, OpenAiPostGeneratorService::class);
+        $this->app->bind(AiClientInterface::class, GroqPostGeneratorService::class);
     }
 
     /**

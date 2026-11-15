@@ -189,11 +189,11 @@ class BlogVerseFeatureTest extends TestCase
 
     public function test_ai_generator_validates_input_and_saves_generated_posts_as_drafts(): void
     {
-        config(['openai.api_key' => 'test-key']);
-        Http::fake(['api.openai.com/v1/responses' => Http::response([
-            'output_text' => json_encode(['articles' => [[
+        config(['groq.api_key' => 'test-key']);
+        Http::fake(['api.groq.com/openai/v1/chat/completions' => Http::response([
+            'choices' => [['message' => ['content' => json_encode(['articles' => [[
                 'title' => 'Belajar Fokus', 'category' => 'Pendidikan', 'excerpt' => 'Cara menjaga fokus.', 'content' => '# Fokus',
-            ]]], JSON_THROW_ON_ERROR),
+            ]]], JSON_THROW_ON_ERROR)]]],
         ])]);
         $writer = User::factory()->create();
         $this->actingAs($writer)->get('/dashboard/posts/ai')->assertOk()->assertInertia(fn (Assert $page) => $page->component('Dashboard/AiGenerator'));
@@ -261,18 +261,18 @@ class BlogVerseFeatureTest extends TestCase
         URL::forceScheme('http');
     }
 
-    public function test_ai_response_fallback_and_error_formats_are_handled(): void
+    public function test_ai_response_validation_and_error_formats_are_handled(): void
     {
-        config(['openai.api_key' => 'test-key']);
+        config(['groq.api_key' => 'test-key']);
         $validText = json_encode(['articles' => [[
-            'title' => 'Artikel Nested', 'category' => 'Opini', 'excerpt' => 'Ringkas', 'content' => '# Isi',
+            'title' => 'Artikel Groq', 'category' => 'Opini', 'excerpt' => 'Ringkas', 'content' => '# Isi',
         ]]], JSON_THROW_ON_ERROR);
         $sequence = Http::sequence()
-            ->push(['output' => [['content' => [['type' => 'output_text', 'text' => $validText]]]]])
-            ->push(['output' => []])
-            ->push(['output_text' => 'bukan json'])
-            ->push(['output_text' => json_encode(['articles' => []], JSON_THROW_ON_ERROR)]);
-        Http::fake(['api.openai.com/v1/responses' => $sequence]);
+            ->push(['choices' => [['message' => ['content' => $validText]]]])
+            ->push(['choices' => []])
+            ->push(['choices' => [['message' => ['content' => 'bukan json']]]])
+            ->push(['choices' => [['message' => ['content' => json_encode(['articles' => []], JSON_THROW_ON_ERROR)]]]]);
+        Http::fake(['api.groq.com/openai/v1/chat/completions' => $sequence]);
         $writer = User::factory()->create();
 
         $this->actingAs($writer)->post('/dashboard/posts/ai-generate', ['count' => 1, 'topic' => 'Topik valid', 'category' => 'Opini'])->assertSessionHas('generatedPosts');
@@ -283,7 +283,7 @@ class BlogVerseFeatureTest extends TestCase
 
     public function test_ai_generator_reports_missing_key(): void
     {
-        config(['openai.api_key' => null]);
+        config(['groq.api_key' => null]);
         $writer = User::factory()->create();
         $this->actingAs($writer)->post('/dashboard/posts/ai-generate', ['count' => 1, 'topic' => 'Tema belajar', 'category' => 'Pendidikan'])
             ->assertSessionHasErrors('generation');
