@@ -61,6 +61,8 @@ class PostService
     /** @param array{title: string, category: string, excerpt?: string|null, content: string} $data */
     public function create(User $user, array $data): Post
     {
+        $cover = $data['cover'] ?? null;
+        unset($data['cover']);
         $slug = Str::slug($data['title']);
         $slug = $slug !== '' ? $slug : 'artikel';
         $base = $slug;
@@ -69,12 +71,25 @@ class PostService
             $slug = $base.'-'.$suffix++;
         }
 
+        if ($cover instanceof UploadedFile) {
+            $data['cover_image_path'] = $cover->store('covers', 'public');
+        }
+
         return $this->posts->createForUser($user, [...$data, 'slug' => $slug, 'is_published' => false]);
     }
 
     /** @param array{title: string, category: string, excerpt?: string|null, content: string} $data */
     public function update(Post $post, array $data): Post
     {
+        $cover = $data['cover'] ?? null;
+        unset($data['cover']);
+        if ($cover instanceof UploadedFile) {
+            if ($post->cover_image_path) {
+                Storage::disk('public')->delete($post->cover_image_path);
+            }
+            $data['cover_image_path'] = $cover->store('covers', 'public');
+        }
+
         return $this->posts->update($post, $data);
     }
 

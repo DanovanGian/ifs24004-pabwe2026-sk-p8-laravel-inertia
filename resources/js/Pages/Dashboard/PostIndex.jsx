@@ -3,7 +3,14 @@ import { useEffect, useState } from 'react';
 import AppLayout from '../../Layouts/AppLayout';
 import MarkdownEditor from '../../Components/MarkdownEditor';
 
-const emptyPost = { title: '', category: 'Umum', excerpt: '', content: '' };
+const emptyPost = { title: '', category: 'Umum', excerpt: '', content: '', cover: null };
+const articleTemplates = {
+    blank: { label: 'Kosong', excerpt: '', content: '' },
+    news: { label: 'Berita', excerpt: 'Ringkasan fakta utama dalam satu atau dua kalimat.', content: '## Apa yang terjadi?\n\nJelaskan peristiwa utama dan fakta penting.\n\n## Latar belakang\n\nBerikan konteks yang membantu pembaca memahami peristiwa.\n\n## Dampak dan langkah berikutnya\n\nUraikan dampak serta perkembangan yang perlu diketahui.' },
+    opinion: { label: 'Opini', excerpt: 'Sampaikan tesis atau sudut pandang utama tulisan Anda.', content: '## Gagasan utama\n\nNyatakan pendapat Anda dengan jelas.\n\n## Alasan dan bukti\n\nDukung pendapat dengan contoh, data, atau pengalaman.\n\n## Sudut pandang lain\n\nPertimbangkan tanggapan atau perspektif yang berbeda.\n\n## Kesimpulan\n\nTegaskan kembali pesan utama dan ajakan untuk pembaca.' },
+    review: { label: 'Ulasan', excerpt: 'Perkenalkan hal yang diulas dan kesan keseluruhan Anda.', content: '## Gambaran singkat\n\nPerkenalkan buku, film, produk, atau pengalaman yang diulas.\n\n## Hal yang paling menonjol\n\nJelaskan kelebihan dan kekurangan dengan contoh.\n\n## Pengalaman pribadi\n\nCeritakan bagaimana hal tersebut memenuhi harapan Anda.\n\n## Rekomendasi\n\nSebutkan siapa yang mungkin menyukainya dan alasannya.' },
+    guide: { label: 'Panduan', excerpt: 'Jelaskan hasil yang bisa dicapai pembaca dengan panduan ini.', content: '## Yang perlu disiapkan\n\nTuliskan alat, bahan, atau prasyarat.\n\n## Langkah-langkah\n\n1. Langkah pertama\n2. Langkah berikutnya\n3. Periksa hasilnya\n\n## Tips dan kendala umum\n\nBagikan saran praktis agar pembaca lebih mudah mengikuti panduan.' },
+};
 
 function Stat({ label, value, tone }) {
     return <div className={`rounded-2xl border p-5 ${tone}`}><p className="text-sm font-medium opacity-70">{label}</p><p className="mt-3 font-serif text-4xl">{value}</p></div>;
@@ -12,6 +19,7 @@ function Stat({ label, value, tone }) {
 export default function PostIndex({ posts, stats, search, categories }) {
     const [query, setQuery] = useState(search ?? '');
     const [modal, setModal] = useState(null);
+    const [coverPreview, setCoverPreview] = useState('');
     const form = useForm(emptyPost);
 
     useEffect(() => setQuery(search ?? ''), [search]);
@@ -20,6 +28,14 @@ export default function PostIndex({ posts, stats, search, categories }) {
         const timer = setTimeout(() => router.get('/dashboard/posts', { search: query || undefined }, { preserveState: true, preserveScroll: true, replace: true }), 250);
         return () => clearTimeout(timer);
     }, [query]);
+    useEffect(() => {
+        if (form.data.cover) {
+            const preview = URL.createObjectURL(form.data.cover);
+            setCoverPreview(preview);
+            return () => URL.revokeObjectURL(preview);
+        }
+        setCoverPreview(modal?.mode === 'edit' && modal.post.cover_image_path ? `/storage/${modal.post.cover_image_path}` : '');
+    }, [form.data.cover, modal]);
 
     function openCreate() {
         form.clearErrors();
@@ -28,12 +44,12 @@ export default function PostIndex({ posts, stats, search, categories }) {
     }
     function openEdit(post) {
         form.clearErrors();
-        form.setData({ title: post.title, category: post.category, excerpt: post.excerpt ?? '', content: post.content });
+        form.setData({ title: post.title, category: post.category, excerpt: post.excerpt ?? '', content: post.content, cover: null });
         setModal({ mode: 'edit', post });
     }
     function submit(event) {
         event.preventDefault();
-        const options = { preserveScroll: true, onSuccess: () => setModal(null) };
+        const options = { forceFormData: true, preserveScroll: true, onSuccess: () => setModal(null) };
         if (modal.mode === 'edit') form.put(`/dashboard/posts/${modal.post.id}`, options);
         else form.post('/dashboard/posts', options);
     }
@@ -66,7 +82,15 @@ export default function PostIndex({ posts, stats, search, categories }) {
             </section>
             {modal && <div className="fixed inset-0 z-50 flex flex-col bg-paper">
                 <div className="flex items-center justify-between bg-forest px-5 py-5 text-white sm:px-10"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a9d5bb]">Editor artikel</p><h2 className="mt-1 font-serif text-2xl">{modal.mode === 'edit' ? 'Ubah artikel' : 'Artikel baru'}</h2></div><button onClick={() => setModal(null)} className="cursor-pointer rounded-full px-4 py-2 text-sm text-white/80 hover:bg-white/10">Tutup ×</button></div>
-                <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col"><div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto px-5 py-7 sm:px-10"><div className="grid gap-5 sm:grid-cols-2"><div><label className="mb-2 block text-sm font-semibold">Judul</label><input value={form.data.title} onChange={(event) => form.setData('title', event.target.value)} className="min-h-12 w-full rounded-xl border border-ink/15 bg-white px-4" />{form.errors.title && <p className="mt-1 text-sm text-red-600">{form.errors.title}</p>}</div><div><label className="mb-2 block text-sm font-semibold">Kategori</label><select value={form.data.category} onChange={(event) => form.setData('category', event.target.value)} className="min-h-12 w-full rounded-xl border border-ink/15 bg-white px-4">{Object.entries(categories).map(([key, label]) => <option key={key}>{label}</option>)}</select></div></div><div><label className="mb-2 block text-sm font-semibold">Ringkasan</label><textarea rows="2" value={form.data.excerpt} onChange={(event) => form.setData('excerpt', event.target.value)} className="w-full rounded-xl border border-ink/15 bg-white p-4" placeholder="Satu atau dua kalimat yang mengundang pembaca." /></div><div><label className="mb-2 block text-sm font-semibold">Isi artikel · Markdown</label><MarkdownEditor value={form.data.content} onChange={(value) => form.setData('content', value)} height="min(48vh, 520px)" />{form.errors.content && <p className="mt-1 text-sm text-red-600">{form.errors.content}</p>}</div></div><div className="flex justify-end gap-3 border-t border-ink/10 bg-[#e9ece3] px-5 py-4 sm:px-10"><button type="button" onClick={() => setModal(null)} className="cursor-pointer rounded-full border border-ink/20 px-5 py-2.5 text-sm font-semibold">Batal</button><button disabled={form.processing} className="cursor-pointer rounded-full bg-forest px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{form.processing ? 'Menyimpan…' : 'Simpan draf'}</button></div></form>
+                <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col"><div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto px-5 py-7 sm:px-10">
+                    <div className="grid gap-5 sm:grid-cols-[1fr_16rem]"><div><label className="mb-2 block text-sm font-semibold">Judul</label><input value={form.data.title} onChange={(event) => form.setData('title', event.target.value)} className="min-h-12 w-full rounded-xl border border-ink/15 bg-white px-4" />{form.errors.title && <p className="mt-1 text-sm text-red-600">{form.errors.title}</p>}</div><div><label className="mb-2 block text-sm font-semibold">Kategori</label><select value={form.data.category} onChange={(event) => form.setData('category', event.target.value)} className="min-h-12 w-full rounded-xl border border-ink/15 bg-white px-4">{Object.entries(categories).map(([key, label]) => <option key={key}>{label}</option>)}</select></div></div>
+                    <div className="grid gap-5 md:grid-cols-[1fr_18rem]">
+                        <div className="rounded-2xl border border-ink/10 bg-white p-5"><label htmlFor="article-template" className="mb-2 block text-sm font-semibold text-forest">Mulai dari template</label><select id="article-template" defaultValue="blank" onChange={(event) => { const template = articleTemplates[event.target.value]; form.setData((current) => ({ ...current, excerpt: template.excerpt, content: template.content })); }} className="min-h-11 w-full rounded-xl border border-ink/15 bg-white px-3 text-sm">{Object.entries(articleTemplates).map(([key, template]) => <option key={key} value={key}>{template.label}</option>)}</select><p className="mt-2 text-xs leading-5 text-ink/50">Pilih struktur awal untuk berita, opini, ulasan, atau panduan. Anda bebas mengubah semua isinya.</p></div>
+                        <div className="rounded-2xl border border-ink/10 bg-white p-5"><label htmlFor="article-cover" className="mb-2 block text-sm font-semibold text-forest">Foto sampul <span className="font-normal text-ink/45">(opsional)</span></label>{coverPreview && <img src={coverPreview} alt="Pratinjau sampul artikel" className="mb-3 aspect-video w-full rounded-xl object-cover" />}<input id="article-cover" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => form.setData('cover', event.target.files[0] ?? null)} className="block w-full text-xs file:mr-3 file:rounded-full file:border-0 file:bg-mint file:px-3 file:py-2 file:font-semibold file:text-forest" /><p className="mt-2 text-xs leading-5 text-ink/50">JPG, PNG, atau WebP · maks. 5 MB</p>{form.errors.cover && <p className="mt-1 text-sm text-red-600">{form.errors.cover}</p>}</div>
+                    </div>
+                    <div><label className="mb-2 block text-sm font-semibold">Ringkasan</label><textarea rows="2" value={form.data.excerpt} onChange={(event) => form.setData('excerpt', event.target.value)} className="w-full rounded-xl border border-ink/15 bg-white p-4" placeholder="Satu atau dua kalimat yang mengundang pembaca." />{form.errors.excerpt && <p className="mt-1 text-sm text-red-600">{form.errors.excerpt}</p>}</div>
+                    <div><label className="mb-2 block text-sm font-semibold">Isi artikel · Markdown</label><MarkdownEditor value={form.data.content} onChange={(value) => form.setData('content', value)} height="min(48vh, 520px)" />{form.errors.content && <p className="mt-1 text-sm text-red-600">{form.errors.content}</p>}</div>
+                </div><div className="flex justify-end gap-3 border-t border-ink/10 bg-[#e9ece3] px-5 py-4 sm:px-10"><button type="button" onClick={() => setModal(null)} className="cursor-pointer rounded-full border border-ink/20 px-5 py-2.5 text-sm font-semibold">Batal</button><button disabled={form.processing} className="cursor-pointer rounded-full bg-forest px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{form.processing ? 'Menyimpan…' : 'Simpan draf'}</button></div></form>
             </div>}
         </AppLayout>
     );

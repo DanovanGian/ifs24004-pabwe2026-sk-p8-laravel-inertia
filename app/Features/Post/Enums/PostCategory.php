@@ -8,6 +8,7 @@ enum PostCategory: string
     case Education = 'Pendidikan';
     case Lifestyle = 'Gaya Hidup';
     case Business = 'Bisnis';
+    case Politics = 'Politik';
     case Opinion = 'Opini';
     case General = 'Umum';
 

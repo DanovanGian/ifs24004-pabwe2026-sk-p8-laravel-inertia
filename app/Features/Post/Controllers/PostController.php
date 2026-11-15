@@ -42,6 +42,7 @@ class PostController
             'category' => ['required', 'string', 'in:'.implode(',', array_keys(PostCategory::options()))],
             'excerpt' => ['nullable', 'string', 'max:2000'],
             'content' => ['required', 'string', 'max:100000'],
+            'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
         $this->posts->create($request->user(), $data);
 
@@ -66,6 +67,7 @@ class PostController
             'category' => ['required', 'string', 'in:'.implode(',', array_keys(PostCategory::options()))],
             'excerpt' => ['nullable', 'string', 'max:2000'],
             'content' => ['required', 'string', 'max:100000'],
+            'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
         $this->posts->update($post, $data);
 
