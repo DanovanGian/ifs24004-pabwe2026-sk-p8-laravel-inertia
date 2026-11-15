@@ -56,4 +56,12 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Build dengan Jenkins
+
+Repositori ini menyediakan `Jenkinsfile` untuk memasang dependensi PHP dan frontend, membangun aset Inertia/React, lalu menyimpan `public/build` sebagai artifact Jenkins.
+
+Siapkan agent Jenkins dengan PHP 8.3 atau lebih baru, Composer 2, serta Node.js 20.19+ atau 22.12+ dan npm. Buat job **Pipeline** atau **Multibranch Pipeline** yang mengambil kode dari repositori ini dan gunakan `Jenkinsfile` pada root repositori sebagai definisi pipeline. Untuk repositori privat, atur kredensial GitHub di konfigurasi SCM Jenkins.
+
+Build frontend ini tidak memerlukan `.env`, database, maupun `GROQ_API_KEY`.
 # ifs24004-pabwe2026-sk-p8-laravel-inertia
