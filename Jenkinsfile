@@ -74,6 +74,10 @@ pipeline {
                     reuseNode true
                 }
             }
+            environment {
+                APP_ENV = 'testing'
+                APP_KEY = 'base64:YmxvZ3ZlcnNlLWNpLXRlc3Qta2V5ISEhISEhISEhISE='
+            }
             steps {
                 sh '''
                     set -e
