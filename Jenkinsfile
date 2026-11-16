@@ -170,7 +170,8 @@ pipeline {
                         -x "coverage/*" \
                         -x ".trivy-cache/*" \
                         -x "latest-app.zip" \
-                        -x "trivy-results.sarif"
+                        -x "trivy-results.sarif" \
+                        -x "*.exe"
                     echo "=== Application Package Created ==="
                     ls -lh latest-app.zip
                     echo "=== Package Content ==="
@@ -262,6 +263,7 @@ pipeline {
                     echo "=== Request Redeployment ==="
                     def redeployResponse = sh(
                         script: '''
+                            set +x
                             set -e
                             curl -sS --fail-with-body \
                                 -X POST "$URL_REDEPLOY" \
@@ -299,6 +301,7 @@ pipeline {
                         echo "=== Checking Deployment Progress (${attempt}/${maxAttempts}) ==="
                         def progressResponse = sh(
                             script: '''
+                                set +x
                                 set -e
                                 curl -sS --fail-with-body \
                                     -X POST "$URL_PROGRESS" \
