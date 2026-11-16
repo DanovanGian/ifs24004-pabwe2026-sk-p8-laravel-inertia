@@ -17,12 +17,20 @@ pipeline {
             }
         }
         // ============================================================
+        // PREPARE PHP BUILD IMAGE (includes GD for PhpSpreadsheet)
+        // ============================================================
+        stage('Prepare PHP Build Image') {
+            steps {
+                sh 'docker build --pull -t blogverse-php-ci:jenkins -f Dockerfile.jenkins .'
+            }
+        }
+        // ============================================================
         // INSTALL DEPENDENCIES
         // ============================================================
         stage('Install Dependencies') {
             agent {
                 docker {
-                    image 'composer:2'
+                    image 'blogverse-php-ci:jenkins'
                     reuseNode true
                 }
             }
@@ -62,7 +70,7 @@ pipeline {
         stage('Test') {
             agent {
                 docker {
-                    image 'composer:2'
+                    image 'blogverse-php-ci:jenkins'
                     reuseNode true
                 }
             }
