@@ -6,6 +6,10 @@ pipeline {
         // Stop later stages if a publisher marks the build UNSTABLE/FAILURE mid-run
         skipStagesAfterUnstable()
     }
+    environment {
+        COMPOSER_ALLOW_SUPERUSER = '1'
+        COMPOSER_NO_INTERACTION = '1'
+    }
     stages {
         // ============================================================
         // CHECKOUT
@@ -17,36 +21,43 @@ pipeline {
             }
         }
         // ============================================================
-        // PREPARE PHP BUILD IMAGE (includes GD for PhpSpreadsheet)
-        // ============================================================
-        stage('Prepare PHP Build Image') {
-            steps {
-                sh 'docker build --pull -t blogverse-php-ci:jenkins -f Dockerfile.jenkins .'
-            }
-        }
-        // ============================================================
         // INSTALL DEPENDENCIES
         // ============================================================
-        stage('Install Dependencies') {
+        stage('Install PHP Dependencies') {
             agent {
                 docker {
-                    image 'blogverse-php-ci:jenkins'
+                    image 'delcom-ci-php:8.5'
                     reuseNode true
+                    args '-u root'
                 }
             }
             steps {
                 sh '''
                     set -e
+                    echo "=== PHP Runtime ==="
+                    php -v
+                    echo "=== Checking required PHP extensions ==="
+                    php -r '
+                        $required = ["ctype", "curl", "dom", "fileinfo", "filter", "hash", "mbstring", "openssl", "pcre", "pdo", "session", "tokenizer", "xml", "pdo_sqlite", "gd", "zip", "iconv", "simplexml", "xmlreader", "xmlwriter", "zlib", "bcmath", "exif"];
+                        $missing = array_filter($required, fn ($ext) => !extension_loaded($ext));
+                        if ($missing) {
+                            fwrite(STDERR, "Missing PHP extensions: " . implode(", ", $missing) . PHP_EOL);
+                            exit(1);
+                        }
+                        echo "OK: required extensions are available." . PHP_EOL;
+                    '
                     echo "=== Installing PHP Dependencies ==="
-                    composer install --no-interaction --prefer-dist --no-progress
+                    composer install --prefer-dist --no-progress --optimize-autoloader
                     echo "=== PHP Dependencies Installed ==="
+                    composer audit --no-interaction
+                    echo "=== Composer Audit Passed ==="
                 '''
             }
         }
         // ============================================================
         // BUILD FRONTEND
         // ============================================================
-        stage('Build Frontend') {
+        stage('Install & Build Frontend') {
             agent {
                 docker {
                     image 'node:24-alpine'
@@ -56,9 +67,13 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    echo "=== Installing npm Dependencies ==="
-                    npm ci
-                    echo "=== Building Inertia/React Assets ==="
+                    echo "=== Installing Frontend Dependencies ==="
+                    if [ -f package-lock.json ]; then
+                        npm ci --ignore-scripts
+                    else
+                        npm install --ignore-scripts
+                    fi
+                    echo "=== Building Vite Assets ==="
                     npm run build
                     echo "=== Frontend Build Complete ==="
                 '''
@@ -70,21 +85,79 @@ pipeline {
         stage('Test') {
             agent {
                 docker {
-                    image 'blogverse-php-ci:jenkins'
+                    image 'delcom-ci-php:8.5'
                     reuseNode true
+                    args '-u root'
                 }
-            }
-            environment {
-                APP_ENV = 'testing'
-                APP_KEY = 'base64:YmxvZ3ZlcnNlLWNpLXRlc3Qta2V5ISEhISEhISEhISE='
             }
             steps {
                 sh '''
                     set -e
-                    echo "=== Running Laravel PHPUnit Tests ==="
-                    vendor/bin/phpunit
+                    echo "=== Checking PHP test and coverage extensions ==="
+                    php -r '
+                        foreach (["gd", "zip", "mbstring", "pdo_sqlite"] as $ext) {
+                            if (!extension_loaded($ext)) {
+                                fwrite(STDERR, "Missing PHP extension: {$ext}" . PHP_EOL);
+                                exit(1);
+                            }
+                        }
+                        if (!extension_loaded("pcov") && !extension_loaded("xdebug")) {
+                            fwrite(STDERR, "Coverage requires pcov or xdebug." . PHP_EOL);
+                            exit(1);
+                        }
+                        echo "OK: test extensions and coverage driver are available." . PHP_EOL;
+                    '
+
+                    echo "=== Preparing Laravel Testing Environment ==="
+                    mkdir -p storage/framework/views storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/logs bootstrap/cache
+                    chmod -R 775 storage bootstrap/cache || true
+                    if [ ! -f .env ]; then cp .env.example .env; fi
+                    php artisan key:generate --force
+                    php artisan config:clear
+                    php artisan view:clear
+
+                    echo "=== Running PHPUnit with Coverage ==="
+                    php vendor/bin/phpunit \
+                        --colors=never \
+                        --coverage-text=coverage.txt \
+                        --coverage-clover=coverage.xml \
+                        --coverage-html=coverage-html
+
+                    echo "=== Enforcing 100% application coverage ==="
+                    php -r '
+                        if (!is_file("coverage.xml")) {
+                            fwrite(STDERR, "coverage.xml was not generated." . PHP_EOL);
+                            exit(1);
+                        }
+                        $xml = @simplexml_load_file("coverage.xml");
+                        $metrics = $xml->project->metrics ?? null;
+                        if ($xml === false || $metrics === null) {
+                            fwrite(STDERR, "Coverage metrics could not be read." . PHP_EOL);
+                            exit(1);
+                        }
+                        $checks = [
+                            "statements" => ["coveredstatements", "statements"],
+                            "methods" => ["coveredmethods", "methods"],
+                            "elements" => ["coveredelements", "elements"],
+                        ];
+                        foreach ($checks as $label => [$coveredKey, $totalKey]) {
+                            $covered = (int) $metrics[$coveredKey];
+                            $total = (int) $metrics[$totalKey];
+                            if ($total > 0 && $covered < $total) {
+                                fwrite(STDERR, "{$label} coverage is below 100% ({$covered}/{$total})." . PHP_EOL);
+                                exit(1);
+                            }
+                        }
+                        echo "OK: application coverage is 100%." . PHP_EOL;
+                    '
+                    ls -lh coverage.xml coverage.txt || true
                     echo "=== Tests Passed ==="
                 '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'coverage.txt,coverage.xml', allowEmptyArchive: true
+                }
             }
         }
         // ============================================================
@@ -116,6 +189,11 @@ pipeline {
                         --cache-dir .trivy-cache \
                         --scanners vuln \
                         --severity HIGH,CRITICAL \
+                        --skip-dirs vendor \
+                        --skip-dirs node_modules \
+                        --skip-dirs coverage-html \
+                        --skip-dirs storage \
+                        --skip-dirs bootstrap/cache \
                         --format sarif \
                         --output trivy-results.sarif \
                         --exit-code 1 \
@@ -149,7 +227,7 @@ pipeline {
         stage('Package Application') {
             agent {
                 docker {
-                    image 'node:24-alpine'
+                    image 'delcom-ci-php:8.5'
                     reuseNode true
                     args '-u root'
                 }
@@ -160,22 +238,46 @@ pipeline {
                     echo "======================================"
                     echo "       CREATING APPLICATION PACKAGE"
                     echo "======================================"
-                    apk add --no-cache zip unzip
                     rm -f latest-app.zip
                     zip -r latest-app.zip . \
+                        -x "vendor/*" \
                         -x "node_modules/*" \
                         -x ".git/*" \
                         -x ".env" \
-                        -x ".env.*" \
+                        -x ".env.backup" \
+                        -x ".env.production" \
+                        -x ".env.local" \
                         -x "coverage/*" \
+                        -x "coverage-html/*" \
+                        -x "coverage.txt" \
+                        -x "coverage.xml" \
                         -x ".trivy-cache/*" \
                         -x "latest-app.zip" \
                         -x "trivy-results.sarif" \
+                        -x ".docs/*" \
+                        -x "tests/*" \
+                        -x "storage/logs/*" \
+                        -x "storage/framework/cache/data/*" \
+                        -x "storage/framework/sessions/*" \
+                        -x "storage/framework/views/*" \
+                        -x "storage/framework/testing/*" \
+                        -x "bootstrap/cache/*.php" \
                         -x "*.exe"
                     echo "=== Application Package Created ==="
                     ls -lh latest-app.zip
-                    echo "=== Package Content ==="
-                    unzip -l latest-app.zip
+                    echo "=== Verifying generated dependencies are excluded ==="
+                    if unzip -Z1 latest-app.zip | grep -E '^(vendor|node_modules)(/|$)' >/dev/null; then
+                        echo "ERROR: package unexpectedly includes vendor/ or node_modules/"
+                        exit 1
+                    fi
+                    echo "OK: vendor/ and node_modules/ are excluded"
+                    echo "=== Verifying Windows executables are excluded ==="
+                    if unzip -Z1 latest-app.zip | grep -Ei '\.exe$' >/dev/null; then
+                        echo "ERROR: package unexpectedly includes a Windows executable"
+                        exit 1
+                    fi
+                    echo "OK: no Windows executables in package"
+                    unzip -l latest-app.zip | head -n 80
                 '''
             }
         }
