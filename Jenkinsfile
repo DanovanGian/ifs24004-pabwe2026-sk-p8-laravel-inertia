@@ -272,7 +272,7 @@ pipeline {
                     fi
                     echo "OK: vendor/ and node_modules/ are excluded"
                     echo "=== Verifying Windows executables are excluded ==="
-                    if unzip -Z1 latest-app.zip | grep -Ei '\.exe$' >/dev/null; then
+                    if unzip -Z1 latest-app.zip | grep -Ei '[.]exe$' >/dev/null; then
                         echo "ERROR: package unexpectedly includes a Windows executable"
                         exit 1
                     fi
