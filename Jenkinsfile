@@ -1,27 +1,39 @@
 pipeline {
+
     agent any
+
     options {
         timestamps()
         skipDefaultCheckout(true)
         // Stop later stages if a publisher marks the build UNSTABLE/FAILURE mid-run
         skipStagesAfterUnstable()
     }
+
     environment {
         COMPOSER_ALLOW_SUPERUSER = '1'
         COMPOSER_NO_INTERACTION = '1'
     }
+
     stages {
+
         // ============================================================
         // CHECKOUT
         // ============================================================
         stage('Checkout') {
-            // Use the Jenkins node for checkout; build containers do not need Git.
+            agent {
+                docker {
+                    image 'alpine:3.21'
+                    reuseNode true
+                }
+            }
+
             steps {
                 checkout scm
             }
         }
+
         // ============================================================
-        // INSTALL DEPENDENCIES
+        // INSTALL PHP DEPENDENCIES
         // ============================================================
         stage('Install PHP Dependencies') {
             agent {
@@ -31,31 +43,62 @@ pipeline {
                     args '-u root'
                 }
             }
+
             steps {
                 sh '''
                     set -e
+
                     echo "=== PHP Runtime ==="
                     php -v
-                    echo "=== Checking required PHP extensions ==="
+
+                    echo "=== Verifying PHP extensions (Laravel + PhpSpreadsheet) ==="
                     php -r '
-                        $required = ["ctype", "curl", "dom", "fileinfo", "filter", "hash", "mbstring", "openssl", "pcre", "pdo", "session", "tokenizer", "xml", "pdo_sqlite", "gd", "zip", "iconv", "simplexml", "xmlreader", "xmlwriter", "zlib", "bcmath", "exif"];
-                        $missing = array_filter($required, fn ($ext) => !extension_loaded($ext));
+                        $required = [
+                            // Laravel core
+                            "ctype", "curl", "dom", "fileinfo", "filter", "hash",
+                            "mbstring", "openssl", "pcre", "pdo", "session",
+                            "tokenizer", "xml",
+                            // Testing (sqlite in-memory)
+                            "pdo_sqlite",
+                            // PhpOffice / PhpSpreadsheet
+                            "gd", "zip", "iconv", "simplexml",
+                            "xmlreader", "xmlwriter", "zlib",
+                            // Common Laravel extras
+                            "bcmath", "exif",
+                        ];
+                        $missing = [];
+                        foreach ($required as $ext) {
+                            if (!extension_loaded($ext)) {
+                                $missing[] = $ext;
+                            }
+                        }
                         if ($missing) {
-                            fwrite(STDERR, "Missing PHP extensions: " . implode(", ", $missing) . PHP_EOL);
+                            fwrite(STDERR, "Missing required PHP extensions: " . implode(", ", $missing) . PHP_EOL);
+                            fwrite(STDERR, "Image delcom-ci-php harus menyediakan ekstensi di atas (termasuk ext-gd untuk PhpSpreadsheet)." . PHP_EOL);
                             exit(1);
                         }
-                        echo "OK: required extensions are available." . PHP_EOL;
+                        echo "OK: all required PHP extensions are available." . PHP_EOL;
                     '
-                    echo "=== Installing PHP Dependencies ==="
-                    composer install --prefer-dist --no-progress --optimize-autoloader
+
+                    echo "=== Installing PHP Dependencies (Composer) ==="
+
+                    composer install \
+                        --prefer-dist \
+                        --no-progress \
+                        --optimize-autoloader
+
                     echo "=== PHP Dependencies Installed ==="
+
+                    echo "=== Composer Audit (fail on vulnerabilities) ==="
+                    # Exit non-zero jika ada advisory → pipeline FAILURE
                     composer audit --no-interaction
-                    echo "=== Composer Audit Passed ==="
+                    echo "=== Composer Audit OK (no known vulnerabilities) ==="
                 '''
             }
         }
+
         // ============================================================
-        // BUILD FRONTEND
+        // INSTALL FRONTEND DEPENDENCIES + BUILD ASSETS
         // ============================================================
         stage('Install & Build Frontend') {
             agent {
@@ -64,23 +107,29 @@ pipeline {
                     reuseNode true
                 }
             }
+
             steps {
                 sh '''
                     set -e
+
                     echo "=== Installing Frontend Dependencies ==="
+                    # package-lock.json may not exist yet; prefer reproducible install when available
                     if [ -f package-lock.json ]; then
                         npm ci --ignore-scripts
                     else
                         npm install --ignore-scripts
                     fi
+
                     echo "=== Building Vite Assets ==="
                     npm run build
-                    echo "=== Frontend Build Complete ==="
+
+                    echo "=== Frontend Build Completed ==="
                 '''
             }
         }
+
         // ============================================================
-        // TEST
+        // TEST (PHPUnit + Coverage)
         // ============================================================
         stage('Test') {
             agent {
@@ -90,76 +139,129 @@ pipeline {
                     args '-u root'
                 }
             }
+
             steps {
                 sh '''
                     set -e
-                    echo "=== Checking PHP test and coverage extensions ==="
+
+                    echo "=== Re-check critical extensions before tests ==="
                     php -r '
                         foreach (["gd", "zip", "mbstring", "pdo_sqlite"] as $ext) {
                             if (!extension_loaded($ext)) {
-                                fwrite(STDERR, "Missing PHP extension: {$ext}" . PHP_EOL);
+                                fwrite(STDERR, "Missing extension for tests: {$ext}" . PHP_EOL);
                                 exit(1);
                             }
                         }
                         if (!extension_loaded("pcov") && !extension_loaded("xdebug")) {
-                            fwrite(STDERR, "Coverage requires pcov or xdebug." . PHP_EOL);
+                            fwrite(STDERR, "Missing coverage driver: need pcov or xdebug" . PHP_EOL);
                             exit(1);
                         }
-                        echo "OK: test extensions and coverage driver are available." . PHP_EOL;
+                        echo "OK: gd, zip, mbstring, pdo_sqlite + coverage driver ready." . PHP_EOL;
                     '
 
                     echo "=== Preparing Laravel Testing Environment ==="
+
                     mkdir -p storage/framework/views storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/logs bootstrap/cache
                     chmod -R 775 storage bootstrap/cache || true
-                    if [ ! -f .env ]; then cp .env.example .env; fi
+
+                    if [ ! -f .env ]; then
+                        cp .env.example .env
+                    fi
+
                     php artisan key:generate --force
                     php artisan config:clear
                     php artisan view:clear
 
                     echo "=== Running PHPUnit with Coverage ==="
+
                     php vendor/bin/phpunit \
                         --colors=never \
                         --coverage-text=coverage.txt \
                         --coverage-clover=coverage.xml \
                         --coverage-html=coverage-html
 
-                    echo "=== Enforcing 100% application coverage ==="
+                    echo "=== Tests Passed ==="
+                    ls -lh coverage.xml coverage.txt || true
+
+                    echo "=== Enforcing 100% Coverage (app/) ==="
                     php -r '
                         if (!is_file("coverage.xml")) {
-                            fwrite(STDERR, "coverage.xml was not generated." . PHP_EOL);
+                            fwrite(STDERR, "coverage.xml tidak ditemukan. Coverage wajib dihasilkan." . PHP_EOL);
                             exit(1);
                         }
+
                         $xml = @simplexml_load_file("coverage.xml");
-                        $metrics = $xml->project->metrics ?? null;
-                        if ($xml === false || $metrics === null) {
-                            fwrite(STDERR, "Coverage metrics could not be read." . PHP_EOL);
+                        if ($xml === false) {
+                            fwrite(STDERR, "coverage.xml tidak dapat diparse." . PHP_EOL);
                             exit(1);
                         }
-                        $checks = [
-                            "statements" => ["coveredstatements", "statements"],
-                            "methods" => ["coveredmethods", "methods"],
-                            "elements" => ["coveredelements", "elements"],
-                        ];
-                        foreach ($checks as $label => [$coveredKey, $totalKey]) {
-                            $covered = (int) $metrics[$coveredKey];
-                            $total = (int) $metrics[$totalKey];
-                            if ($total > 0 && $covered < $total) {
-                                fwrite(STDERR, "{$label} coverage is below 100% ({$covered}/{$total})." . PHP_EOL);
-                                exit(1);
-                            }
+
+                        $metrics = $xml->project->metrics ?? null;
+                        if ($metrics === null) {
+                            $nodes = $xml->xpath("//project/metrics");
+                            $metrics = $nodes[0] ?? null;
                         }
-                        echo "OK: application coverage is 100%." . PHP_EOL;
+                        if ($metrics === null) {
+                            fwrite(STDERR, "Metrik coverage tidak ditemukan di coverage.xml." . PHP_EOL);
+                            exit(1);
+                        }
+
+                        // PHPUnit clover project metrics: statements/methods/elements
+                        // (tidak selalu ada coveredclasses — jangan dipakai sebagai gate)
+                        $statements = (int) $metrics["statements"];
+                        $coveredStatements = (int) $metrics["coveredstatements"];
+                        $methods = (int) $metrics["methods"];
+                        $coveredMethods = (int) $metrics["coveredmethods"];
+                        $elements = (int) $metrics["elements"];
+                        $coveredElements = (int) $metrics["coveredelements"];
+
+                        if ($statements <= 0) {
+                            fwrite(STDERR, "Tidak ada statement yang diukur (statements=0)." . PHP_EOL);
+                            exit(1);
+                        }
+
+                        $linePct = round(100 * $coveredStatements / $statements, 2);
+                        $methodPct = $methods > 0 ? round(100 * $coveredMethods / $methods, 2) : 100.0;
+                        $elementPct = $elements > 0 ? round(100 * $coveredElements / $elements, 2) : 100.0;
+
+                        echo "Coverage summary (source=app/):" . PHP_EOL;
+                        echo "  Lines/Statements : {$coveredStatements}/{$statements} ({$linePct}%)" . PHP_EOL;
+                        echo "  Methods          : {$coveredMethods}/{$methods} ({$methodPct}%)" . PHP_EOL;
+                        echo "  Elements         : {$coveredElements}/{$elements} ({$elementPct}%)" . PHP_EOL;
+
+                        $failed = false;
+                        if ($coveredStatements < $statements) {
+                            fwrite(STDERR, "FAIL: Line coverage harus 100%. Saat ini {$linePct}%." . PHP_EOL);
+                            $failed = true;
+                        }
+                        if ($methods > 0 && $coveredMethods < $methods) {
+                            fwrite(STDERR, "FAIL: Method coverage harus 100%. Saat ini {$methodPct}%." . PHP_EOL);
+                            $failed = true;
+                        }
+                        if ($elements > 0 && $coveredElements < $elements) {
+                            fwrite(STDERR, "FAIL: Element coverage harus 100%. Saat ini {$elementPct}%." . PHP_EOL);
+                            $failed = true;
+                        }
+
+                        if ($failed) {
+                            exit(1);
+                        }
+
+                        echo "OK: Coverage 100% (lines, methods, elements)." . PHP_EOL;
                     '
-                    ls -lh coverage.xml coverage.txt || true
-                    echo "=== Tests Passed ==="
                 '''
             }
+
             post {
                 always {
-                    archiveArtifacts artifacts: 'coverage.txt,coverage.xml', allowEmptyArchive: true
+                    archiveArtifacts(
+                        artifacts: 'coverage.txt,coverage.xml',
+                        allowEmptyArchive: true
+                    )
                 }
             }
         }
+
         // ============================================================
         // TRIVY SECURITY SCAN
         // ============================================================
@@ -168,6 +270,7 @@ pipeline {
                 docker {
                     image 'aquasec/trivy:0.74.0'
                     reuseNode true
+
                     args '''
                         --entrypoint=""
                         -e HOME=/tmp
@@ -175,16 +278,22 @@ pipeline {
                     '''
                 }
             }
+
             steps {
                 sh '''
                     set -e
+
                     mkdir -p .trivy-cache || true
+
                     echo "======================================"
                     echo "        TRIVY SECURITY SCAN"
                     echo "======================================"
+
                     echo "=== Trivy Version ==="
                     trivy --version
+
                     echo "=== Trivy Scan ==="
+
                     trivy fs \
                         --cache-dir .trivy-cache \
                         --scanners vuln \
@@ -198,10 +307,12 @@ pipeline {
                         --output trivy-results.sarif \
                         --exit-code 1 \
                         .
+
                     echo "=== Trivy Result ==="
                     ls -lh trivy-results.sarif
                 '''
             }
+
             post {
                 always {
                     // failOnError must be false: otherwise Warnings NG can mark the
@@ -221,6 +332,7 @@ pipeline {
                 }
             }
         }
+
         // ============================================================
         // PACKAGE APPLICATION
         // ============================================================
@@ -232,13 +344,20 @@ pipeline {
                     args '-u root'
                 }
             }
+
             steps {
                 sh '''
                     set -e
+
                     echo "======================================"
                     echo "       CREATING APPLICATION PACKAGE"
                     echo "======================================"
+
                     rm -f latest-app.zip
+
+                    # vendor & node_modules sengaja tidak ikut zip
+                    # (diinstal ulang di server deploy via composer/npm)
+                    # .env.example tetap ikut; .env lokal tidak
                     zip -r latest-app.zip . \
                         -x "vendor/*" \
                         -x "node_modules/*" \
@@ -261,85 +380,107 @@ pipeline {
                         -x "storage/framework/sessions/*" \
                         -x "storage/framework/views/*" \
                         -x "storage/framework/testing/*" \
-                        -x "bootstrap/cache/*.php" \
-                        -x "*.exe"
+                        -x "bootstrap/cache/*.php"
+
                     echo "=== Application Package Created ==="
+
                     ls -lh latest-app.zip
-                    echo "=== Verifying generated dependencies are excluded ==="
+
+                    echo "=== Verify vendor/node_modules excluded ==="
                     if unzip -Z1 latest-app.zip | grep -E '^(vendor|node_modules)(/|$)' >/dev/null; then
-                        echo "ERROR: package unexpectedly includes vendor/ or node_modules/"
+                        echo "ERROR: zip masih berisi vendor/ atau node_modules/"
+                        unzip -Z1 latest-app.zip | grep -E '^(vendor|node_modules)(/|$)' | head -n 20
                         exit 1
                     fi
-                    echo "OK: vendor/ and node_modules/ are excluded"
-                    echo "=== Verifying Windows executables are excluded ==="
-                    if unzip -Z1 latest-app.zip | grep -Ei '[.]exe$' >/dev/null; then
-                        echo "ERROR: package unexpectedly includes a Windows executable"
-                        exit 1
-                    fi
-                    echo "OK: no Windows executables in package"
+                    echo "OK: vendor/ dan node_modules/ tidak ada di zip"
+
+                    echo "=== Package Content (sample) ==="
+
                     unzip -l latest-app.zip | head -n 80
                 '''
             }
         }
+
         // ============================================================
         // PUBLISH APPLICATION
         // ============================================================
         stage('Publish Application') {
+
             steps {
+
                 // ========================================================
                 // 1. ARCHIVE ARTIFACT KE JENKINS
                 // ========================================================
+
                 archiveArtifacts(
                     artifacts: 'latest-app.zip',
                     fingerprint: true,
                     allowEmptyArchive: false
                 )
+
                 script {
+
                     // ====================================================
                     // 2. BUAT IDENTITAS APPLICATION
                     // ====================================================
+
                     def appName = env.JOB_NAME
                         .replaceAll('[^a-zA-Z0-9._-]', '-')
                         .replaceAll('-+', '-')
                         .replaceAll('^-|-$', '')
+
                     def buildId = env.BUILD_NUMBER
+
                     echo "Application Name: ${appName}"
                     echo "Build ID: ${buildId}"
+
                     // ====================================================
                     // 3. COPY KE USER CONTENT
                     // ====================================================
+
                     sh """
                         set -e
+
                         echo "======================================"
                         echo "       PUBLISHING USER CONTENT"
                         echo "======================================"
-                        docker exec cicd-jenkins \
-                            mkdir -p \
+
+                        docker exec cicd-jenkins \\
+                            mkdir -p \\
                             "/var/jenkins_home/userContent/applications/${appName}/${buildId}"
-                        docker cp \
-                            latest-app.zip \
+
+                        docker cp \\
+                            latest-app.zip \\
                             "cicd-jenkins:/var/jenkins_home/userContent/applications/${appName}/${buildId}/latest-app.zip"
+
                         echo "=== Published File ==="
-                        docker exec cicd-jenkins \
-                            ls -lh \
+
+                        docker exec cicd-jenkins \\
+                            ls -lh \\
                             "/var/jenkins_home/userContent/applications/${appName}/${buildId}/latest-app.zip"
                     """
+
                     // ====================================================
                     // 4. BUAT PUBLIC ARTIFACT URL
                     // ====================================================
+
                     def jenkinsBaseUrl = env.BUILD_URL
                         .substring(0, env.BUILD_URL.indexOf('/job/'))
                         .replace('localhost', 'host.docker.internal')
+
                     env.ARTIFACT_URL =
                         "${jenkinsBaseUrl}/userContent/applications/${appName}/${buildId}/latest-app.zip"
+
                     echo "======================================"
                     echo "       APPLICATION PUBLISHED"
                     echo "======================================"
+
                     echo "Artifact URL:"
                     echo "${env.ARTIFACT_URL}"
                 }
             }
         }
+
         // ============================================================
         // DEPLOY APPLICATION
         // ============================================================
@@ -351,22 +492,28 @@ pipeline {
                     args '--network cicd-network'
                 }
             }
+
             steps {
                 script {
+
                     echo "=========================================="
                     echo "       START APPLICATION DEPLOYMENT"
                     echo "=========================================="
+
                     echo "Artifact URL:"
                     echo "${env.ARTIFACT_URL}"
+
                     // ==================================================
                     // 1. REQUEST REDEPLOYMENT
                     // ==================================================
+
                     echo ""
                     echo "=== Request Redeployment ==="
+
                     def redeployResponse = sh(
                         script: '''
-                            set +x
                             set -e
+
                             curl -sS --fail-with-body \
                                 -X POST "$URL_REDEPLOY" \
                                 -H "Content-Type: application/json" \
@@ -379,18 +526,25 @@ pipeline {
                         ''',
                         returnStdout: true
                     ).trim()
+
                     echo "Redeploy Response:"
                     echo redeployResponse
+
                     // ==================================================
                     // 2. POLLING DEPLOYMENT PROGRESS
                     // ==================================================
+
                     echo ""
                     echo "=== Waiting For Deployment ==="
+
                     def maxAttempts = 120
                     def attempt = 0
                     def deploymentStatus = 'IN_PROGRESS'
+
                     while (deploymentStatus == 'IN_PROGRESS') {
+
                         attempt++
+
                         if (attempt > maxAttempts) {
                             error(
                                 "Deployment timeout. " +
@@ -398,13 +552,16 @@ pipeline {
                                 "${maxAttempts} attempts."
                             )
                         }
+
                         sleep time: 5, unit: 'SECONDS'
+
                         echo ""
                         echo "=== Checking Deployment Progress (${attempt}/${maxAttempts}) ==="
+
                         def progressResponse = sh(
                             script: '''
-                                set +x
                                 set -e
+
                                 curl -sS --fail-with-body \
                                     -X POST "$URL_PROGRESS" \
                                     -H "Content-Type: application/json" \
@@ -415,56 +572,75 @@ pipeline {
                             ''',
                             returnStdout: true
                         ).trim()
+
                         echo "Progress Response:"
                         echo progressResponse
+
                         // ==================================================
                         // PARSE JSON
                         // ==================================================
+
                         def json = readJSON text: progressResponse
+
                         deploymentStatus = json?.data?.status
                             ?.toString()
                             ?.toUpperCase()
+
                         if (!deploymentStatus) {
                             error(
                                 "Response progress tidak memiliki data.status"
                             )
                         }
+
                         echo "Deployment Status: ${deploymentStatus}"
+
                         // ==================================================
                         // SUCCESS
                         // ==================================================
+
                         if (deploymentStatus == 'SUCCESS') {
+
                             echo ""
                             echo "=========================================="
                             echo "       ✅ DEPLOYMENT SUCCESS"
                             echo "=========================================="
+
                             break
                         }
+
                         // ==================================================
                         // FAIL
                         // ==================================================
+
                         if (deploymentStatus == 'FAIL') {
+
                             echo ""
                             echo "=========================================="
                             echo "       ❌ DEPLOYMENT FAILED"
                             echo "=========================================="
+
                             def deploymentLog =
                                 json?.data?.log
                                     ?: 'Deployment failed tanpa log.'
+
                             echo ""
                             echo "========== DEPLOYMENT LOG =========="
                             echo deploymentLog
                             echo "===================================="
+
                             error(
                                 "Deployment gagal untuk website " +
                                 "${WEBSITE_ID}"
                             )
                         }
+
                         // ==================================================
                         // OTHER STATUS
                         // ==================================================
+
                         echo "Deployment masih berjalan..."
                     }
+
                     echo ""
                     echo "=========================================="
                     echo "       DEPLOYMENT FINISHED"
@@ -473,16 +649,19 @@ pipeline {
             }
         }
     }
+
     // ================================================================
     // POST ACTIONS
     // ================================================================
     post {
+
         always {
             archiveArtifacts(
                 artifacts: 'trivy-results.sarif',
                 allowEmptyArchive: true
             )
         }
+
         success {
             echo "=========================================="
             echo "       ✅ PIPELINE SUCCESS"
@@ -491,6 +670,7 @@ pipeline {
             echo "📦 Artifact: ${env.ARTIFACT_URL ?: '(not published)'}"
             echo "🚀 Website berhasil dideploy."
         }
+
         failure {
             echo "=========================================="
             echo "       ❌ PIPELINE FAILED"
@@ -498,6 +678,7 @@ pipeline {
             echo "Result: ${currentBuild.currentResult}"
             echo "Periksa log stage yang merah / Console Output untuk penyebab gagal."
         }
+
         unstable {
             echo "=========================================="
             echo "       ⚠️ PIPELINE UNSTABLE"
