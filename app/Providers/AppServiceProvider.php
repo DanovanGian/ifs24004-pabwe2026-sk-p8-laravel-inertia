@@ -27,11 +27,12 @@ class AppServiceProvider extends ServiceProvider
      * Bootstrap any application services.
      */
     public function boot(): void
-    {
-        Gate::policy(Post::class, PostPolicy::class);
+{
+    Gate::policy(Post::class, PostPolicy::class);
 
-        if (config('app.force_https')) {
-            URL::forceScheme('https');
-        }
+    if (config('app.force_https')) {
+        URL::forceRootUrl(config('app.url'));
+        URL::forceScheme('https');
     }
+}
 }
