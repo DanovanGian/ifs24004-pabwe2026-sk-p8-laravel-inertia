@@ -37,13 +37,14 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
+            'csrfToken' => csrf_token(),
             'auth' => [
                 'user' => $request->user()?->only('id', 'name', 'username', 'email', 'role', 'profile_photo_path'),
             ],
             'flash' => [
-                'success' => fn () => $request->session()->get('success'),
-                'error' => fn () => $request->session()->get('error'),
-                'generatedPosts' => fn () => $request->session()->get('generatedPosts'),
+                'success' => fn() => $request->session()->get('success'),
+                'error' => fn() => $request->session()->get('error'),
+                'generatedPosts' => fn() => $request->session()->get('generatedPosts'),
             ],
         ];
     }
