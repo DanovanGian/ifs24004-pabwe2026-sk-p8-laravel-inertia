@@ -12,7 +12,7 @@ const coverTemplates = [
 ];
 
 function Stat({ label, value, tone }) {
-    return <div className={`rounded-2xl border p-5 ${tone}`}><p className="text-sm font-medium opacity-70">{label}</p><p className="mt-3 font-serif text-4xl">{value}</p></div>;
+    return <div className={`rounded-2xl border p-5 ${tone}`}><p className="text-sm font-medium opacity-100">{label}</p><p className="mt-3 font-serif text-4xl">{value}</p></div>;
 }
 
 export default function PostIndex({ posts, stats, search, categories }) {
