@@ -9,10 +9,8 @@ export default function PublicLayout({ children, isAuthenticated = false }) {
 
     return (
         <div className="min-h-screen bg-paper text-ink">
-            <div className="hidden bg-forest px-5 py-2 text-center text-[11px] font-semibold tracking-[0.12em] text-white/80 sm:block">
-                IDE, CERITA, DAN PERSPEKTIF DARI KOMUNITAS PENULIS INDONESIA
-            </div>
             <header className="sticky top-0 z-30 border-b border-ink/10 bg-paper/90 backdrop-blur-xl">
+<div className="hidden bg-forest px-5 py-2 text-center text-[11px] font-semibold tracking-[0.12em] text-white sm:block">IDE, CERITA, DAN PERSPEKTIF DARI KOMUNITAS PENULIS INDONESIA</div>
                 <nav aria-label="Navigasi utama" className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
                     <Link href="/" className="group flex shrink-0 items-center gap-3 text-forest no-underline">
                         <span className="grid size-10 place-items-center rounded-[14px] bg-forest font-serif text-xl font-bold text-white shadow-sm transition group-hover:-rotate-3">B.</span>

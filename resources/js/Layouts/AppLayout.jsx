@@ -53,8 +53,10 @@ export default function AppLayout({ children, title, admin = false }) {
                     <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-coral">{admin ? 'Administrasi' : 'Dashboard penulis'}</p><h1 className="mt-1 font-serif text-xl font-semibold tracking-tight text-forest sm:text-2xl">{title}</h1></div>
                     <div className="flex items-center gap-3"><span className="hidden text-sm font-medium text-ink/60 sm:inline">{user?.name}</span>{user?.profile_photo_path ? <img src={`/storage/${user.profile_photo_path}`} alt="Foto profil" className="size-10 rounded-full object-cover ring-2 ring-mint" /> : <span className="grid size-10 place-items-center rounded-full bg-mint font-serif text-lg font-bold text-forest">{user?.name?.slice(0, 1)?.toUpperCase()}</span>}<button type="button" onClick={logout} className="cursor-pointer rounded-full border border-ink/10 px-3 py-2 text-xs font-semibold text-ink/55 transition hover:border-coral/30 hover:text-coral lg:hidden">Keluar</button></div>
                 </header>
-                <div className="mx-auto max-w-7xl px-5 pt-5 sm:px-8 lg:px-10">{flash?.success && <p role="status" className="rounded-xl border border-forest/10 bg-mint px-4 py-3 text-sm font-semibold text-forest shadow-sm">{flash.success}</p>}{flash?.error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{flash.error}</p>}</div>
+                <main>
+<div className="mx-auto max-w-7xl px-5 pt-5 sm:px-8 lg:px-10">{flash?.success && <p role="status" className="rounded-xl border border-forest/10 bg-mint px-4 py-3 text-sm font-semibold text-forest shadow-sm">{flash.success}</p>}{flash?.error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{flash.error}</p>}</div>
                 {children}
+</main>
             </div>
         </div>
     );

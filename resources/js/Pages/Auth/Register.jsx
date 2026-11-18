@@ -19,7 +19,7 @@ export default function Register() {
     return (
         <PublicLayout>
             <Head title="Daftar penulis" />
-            <main className="page-wash px-5 py-10 sm:px-8 sm:py-16">
+            <div className="page-wash px-5 py-10 sm:px-8 sm:py-16">
                 <section className="mx-auto grid max-w-6xl overflow-hidden rounded-[2rem] border border-ink/5 bg-white shadow-[0_24px_80px_rgba(21,35,30,0.09)] sm:grid-cols-[0.92fr_1.08fr]">
                     <div className="relative hidden flex-col justify-between overflow-hidden bg-[#e9ede3] p-10 text-forest sm:flex lg:p-14">
                         <div aria-hidden="true" className="absolute -bottom-20 -right-20 size-80 rounded-full border border-forest/10" />
@@ -42,7 +42,7 @@ export default function Register() {
                         </div>
                     </div>
                 </section>
-            </main>
+            </div>
         </PublicLayout>
     );
 }

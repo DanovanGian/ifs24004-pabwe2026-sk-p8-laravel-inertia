@@ -7,7 +7,7 @@ export default function Login() {
     return (
         <PublicLayout>
             <Head title="Masuk" />
-            <main className="page-wash px-5 py-10 sm:px-8 sm:py-16">
+            <div className="page-wash px-5 py-10 sm:px-8 sm:py-16">
                 <section className="mx-auto grid max-w-6xl overflow-hidden rounded-[2rem] border border-ink/5 bg-white shadow-[0_24px_80px_rgba(21,35,30,0.09)] sm:min-h-[36rem] sm:grid-cols-[0.95fr_1.05fr]">
                     <div className="relative hidden flex-col justify-between overflow-hidden bg-forest p-10 text-white sm:flex lg:p-14">
                         <div aria-hidden="true" className="editorial-grid absolute inset-0 opacity-40" />
@@ -34,7 +34,7 @@ export default function Login() {
                         </div>
                     </div>
                 </section>
-            </main>
+            </div>
         </PublicLayout>
     );
 }
