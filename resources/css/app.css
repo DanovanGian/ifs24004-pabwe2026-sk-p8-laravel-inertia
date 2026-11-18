@@ -11,7 +11,7 @@
     --color-paper: #f5f4ef;
     --color-forest: #163b31;
     --color-mint: #d9e8dd;
-    --color-coral: #df7255;
+    --color-coral: #a8452b;
     --color-clay: #f0e6dc;
 }
 
@@ -27,7 +27,7 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--color-paper); color: var(--color-ink); }
 a, button, select { cursor: pointer; }
 ::selection { background: #c9e5d4; color: #173f35; }
-:focus-visible { outline: 3px solid #df7255; outline-offset: 3px; }
+:focus-visible { outline: 3px solid #a8452b; outline-offset: 3px; }
 
 .page-wash {
     background-image: radial-gradient(circle at 8% 14%, rgb(217 232 221 / 45%), transparent 28rem),
